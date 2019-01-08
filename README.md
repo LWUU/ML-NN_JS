@@ -1,5 +1,5 @@
 # ML-NN_JS
-This is a neural network library (in JavaScript) including the fundamental hyper-parameter settings as well as optimizer (mini-batch, momentum, Adam) settings. 
+This is a neural network library in JavaScript including the fundamental hyper-parameter settings as well as optimizer (mini-batch, momentum, Adam) settings. 
 
 The activation chain: linear-> RELU -> linear-> RELU -> ....-> linear-> sigmoid
 
@@ -7,7 +7,7 @@ The matrix library is in https://github.com/LWUU/ML-Matrix_JS, feel free to have
 
 You can use it by copying the entire function to the source code or create your own library by modifying it.
 
-As this is the first neural network library I wrote, although I have tested all the functionalities,  the bugs can still exist. Also, I expected there is a lot of room to be improved for the algorithm. In case you (lucky enough to) find any of the bugs or have any feedback positive or negative. I am really looking forward to knowing it, and will try my best to make this work better!
+As this is the first neural network library I wrote, although all the functionalities have been tested, the bugs can still exist. On the other hand, I highly expected the room for the algorithm improvement. In case you (lucky enough) find a bug or have any feedback positive or negative, I am really willing to know it, and of course by working together this work will more robust and effecient.
 
 ### Get started by training the first NN
 You need to load the data sets fisrt, which are avaliable in . / src / Dataset.js
