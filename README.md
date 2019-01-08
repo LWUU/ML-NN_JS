@@ -1,2 +1,2 @@
 # Neural-Network_JS
-Neural-Network:JS
+A neural network library fully based on javascript
