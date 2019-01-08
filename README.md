@@ -1,5 +1,4 @@
-# Neural-Network_JS
-
+# ML-NN_JS
 This is a neural network (fully connected) library including the fundamental hyper-parameter settings as well as optimizer (mini-batch, momentum, Adam) settings. 
 
 The activation chain: linear-> RELU -> linear-> RELU -> ....-> linear-> sigmoid
