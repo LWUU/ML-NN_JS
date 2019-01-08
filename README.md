@@ -4,7 +4,7 @@ This is a neural network (fully connected) library including the fundamental hyp
 
 The activation chain: linear-> RELU -> linear-> RELU -> ....-> linear-> sigmoid
 
-The matrix library is in https://github.com/Lichao-Wu/ML-Matrix_JS/blob/master/README.md, feel free to have a look on it.
+The matrix library is in https://github.com/Lichao-Wu/ML-Matrix_JS, feel free to have a look on it.
 
 You can use it by copying the entire function to the source code or create your own library by modifying it.
 
