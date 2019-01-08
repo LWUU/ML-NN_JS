@@ -40,7 +40,7 @@ The accuracy is calculated by sending all the train_X to the trained model, then
 Probably your accuracy is not good enough, that is because several hyperparameters are set as default, try to tune these value and you may get better accuracy.
 
 ### Parameters setting
-The parameters are defined in function NN.init({}). As is discussed above, the layer_dims must be specified to define the neural network architecture. The definition of the other parameters are fully optional as the default values have been specified already, but you can play with them to get a better result. The default values are used as input.
+As is discussed above, the parameters are defined in function NN.init({}). Specifically, the layer_dims MUST be specified to define the neural network architecture. The definition of the other parameters are fully optional as the default values have been specified already, but you can play with them to get a better result. The default values are used as input for the following code, you can also check the source code the more details.
 ```js
 var NN = new NN.init({
     layer_dims: ,
