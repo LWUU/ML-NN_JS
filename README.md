@@ -43,7 +43,7 @@ Probably your accuracy is not good enough, that is because several hyper-paramet
 The parameters are defined in function NN.init({}). As is discussed above, the layer_dims must be specified to define the neural network architecture. The definition of the other is optional as the default values have been specified already, but you can play with it to get a better result. The default values are used as input.
 ```js
 var NN = new NN.init({
-    layer_dims: [train_X[0].length, 20, 5, 1],
+    layer_dims: ,
     init_method: null, //"He", 
     iterations: 1000,
     learning_rate: 0.001,
