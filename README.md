@@ -1,5 +1,5 @@
 # ML-NN_JS
-This is a neural network library in JavaScript including the fundamental hyper-parameter settings as well as optimizer (mini-batch, momentum, Adam) settings. 
+This is a neural network library in JavaScript including the fundamental hyperparameter settings as well as optimizer (mini-batch, momentum, Adam) settings. 
 
 The activation chain: linear-> RELU -> linear-> RELU -> ....-> linear-> sigmoid
 
@@ -37,10 +37,10 @@ NN.train(train_X, train_Y);
 ```
 The accuracy is calculated by sending all the train_X to the trained model, then compare with the correct Y label train_Y. 
 
-Probably your accuracy is not good enough, that is because several hyper-parameters are set as default, tuning these value and you may get better accuracy.
+Probably your accuracy is not good enough, that is because several hyperparameters are set as default, try to tune these value and you may get better accuracy.
 
 ### Parameters setting
-The parameters are defined in function NN.init({}). As is discussed above, the layer_dims must be specified to define the neural network architecture. The definition of the other is optional as the default values have been specified already, but you can play with it to get a better result. The default values are used as input.
+The parameters are defined in function NN.init({}). As is discussed above, the layer_dims must be specified to define the neural network architecture. The definition of the other parameters are fully optional as the default values have been specified already, but you can play with them to get a better result. The default values are used as input.
 ```js
 var NN = new NN.init({
     layer_dims: ,
