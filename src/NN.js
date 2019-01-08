@@ -1,9 +1,22 @@
-var ML = ML || {};
+var NN = NN || {};
 (function (ml) {
-    var NN = function (config) {
+    var init = function (config) {
         config = config || {};
+        if (!config.init_method) {
+            //default: random inintialization
+            print("Initialization method is set as default (random inintialization).");
+            config.init_method = null;
+        }
+        if (!config.mini_batch_size) {
+            print("Mini-batch size is set as default (the number of the training sets).");
+            config.mini_batch_size = null;
+        }
         if (!config.layer_dims) {
             throw "Error: please specify the NN layer structure in an array";
+        }
+        if (!config.opti_method) {
+            print("Optimization method is set as default (gradient descent).");
+            config.opti_method = null;
         }
         if (!config.iterations) {
             config.iterations = 1000;
@@ -14,12 +27,14 @@ var ML = ML || {};
         if (!config.lambda) {
             config.lambda = 0;
         }
+        if (!config.beta1) {
+            config.beta1 = 0.9;
+        }
+        if (!config.beta2) {
+            config.beta2 = 0.999;
+        }
         if (!config.keep_prob) {
             config.keep_prob = 1;
-        }
-        if (!config.init_method) {
-            //default: random inintialization
-            config.init_method = null;
         }
         if (!config.print_cost) {
             config.print_cost = false;
@@ -27,15 +42,19 @@ var ML = ML || {};
         if (!config.gradient_check) {
             config.gradient_check = false;
         }
+        this.mini_batch_size = config.mini_batch_size;
         this.layer_dims = config.layer_dims;
         this.iterations = config.iterations;
         this.learning_rate = new Matrix([[config.learning_rate]]);
         this.lambda = new Matrix([[config.lambda]]);
+        this.beta1 = config.beta1;
+        this.beta2 = config.beta2;
         this.keep_prob = config.keep_prob;
         this.init_method = config.init_method;
+        this.opti_method = config.opti_method;
         this.print_cost = config.print_cost;
         this.gradient_check = config.gradient_check;
-        this.layer_num = config.layer_dims.length;
+        this.layer_num = config.layer_dims.length - 1;
     };
     function broadcast(matrix1, matrix2) {
         matrix1 = new Matrix(matrix1);
@@ -118,6 +137,7 @@ var ML = ML || {};
         }
         return [matrix1, matrix2];
     }
+    //matrix library for operation
     function Matrix(inputMatrix) {
         if (inputMatrix) {
             try {
@@ -265,6 +285,24 @@ var ML = ML || {};
             }
             return matrixContainer;
         };
+        this.shuffle = function (matrix) {
+            var length1 = this.matrix.length;
+            var width1 = this.matrix[0].length;
+            var length2 = matrix.matrix.length;
+            for (var j = width1 - 1; j > 0; j--) {
+                var random_index = Math.floor(Math.random() * (j + 1));
+                for (var i = 0; i < length1; i++) {
+                    var temp1 = this.matrix[i][j];
+                    this.matrix[i][j] = this.matrix[i][random_index];
+                    this.matrix[i][random_index] = temp1;
+                }
+                for (var i = 0; i < length2; i++) {
+                    var temp2 = matrix.matrix[i][j];
+                    matrix.matrix[i][j] = matrix.matrix[i][random_index];
+                    matrix.matrix[i][random_index] = temp2;
+                }
+            }
+        };
         this.exp = function () {
             var length = this.matrix.length;
             var width = this.matrix[0].length;
@@ -409,23 +447,96 @@ var ML = ML || {};
             }
         };
     }
+    //return .X and .Y
+    init.prototype.random_mini_batches = function (X, Y) {
+        var X_mini = new Array();
+        var Y_mini = new Array();
+        var X_train = new Array();
+        var Y_train = new Array();
+        var m = X.shape()[1];
+        if (!this.mini_batch_size) {
+            this.mini_batch_size = m;
+        }
+        var num = Math.floor(m / this.mini_batch_size);
+        X.shuffle(Y);
+        for (var k = 0; k < num; k++) {
+            for (var i = 0; i < X.shape()[0]; i++) {
+                X_mini[i] = X.matrix[i].slice(k * this.mini_batch_size, (k + 1) * this.mini_batch_size - 1);
+            }
+            X_train.push(new Matrix(X_mini));
+        }
+        for (var k = 0; k < num; k++) {
+            for (var i = 0; i < Y.shape()[0]; i++) {
+                Y_mini[i] = Y.matrix[i].slice(k * this.mini_batch_size, (k + 1) * this.mini_batch_size - 1);
+            }
+            Y_train.push(new Matrix(Y_mini));
+        }
+        if (m % this.mini_batch_size !== 0) {
+            for (var i = 0; i < X.shape()[0]; i++) {
+                X_mini[i] = X.matrix[i].slice(num * this.mini_batch_size, m - 1);
+            }
+            X_train.push(new Matrix(X_mini));
+            for (var i = 0; i < Y.shape()[0]; i++) {
+                Y_mini[i] = Y.matrix[i].slice(num * this.mini_batch_size, m - 1);
+            }
+            Y_train.push(new Matrix(Y_mini));
+        }
+        return {
+            X: X_train,
+            Y: Y_train
+        };
+    };
+    //return v[No.layer]["W"/"b"]
+    init.prototype.initialize_velocity = function () {
+        var v = new Array();
+        var L = this.layer_dims.length;
+        for (var l = 1; l < L; l++) {
+            v[l] = new Object();
+            v[l]["dW"] = new Matrix();
+            v[l]["db"] = new Matrix();
+            v[l]["dW"].create([this.layer_dims[l], this.layer_dims[l - 1]], 0);
+            v[l]["db"].create([this.layer_dims[l], 1], 0);
+        }
+        return v;
+    };
+    //return v[No.layer]["W"/"b"]
+    init.prototype.initialize_adam = function () {
+        var v = new Array();
+        var s = new Array();
+        var L = this.layer_dims.length;
+        for (var l = 1; l < L; l++) {
+            v[l] = new Object();
+            s[l] = new Object();
+            v[l]["dW"] = new Matrix();
+            v[l]["db"] = new Matrix();
+            s[l]["dW"] = new Matrix();
+            s[l]["db"] = new Matrix();
+            v[l]["dW"].create([this.layer_dims[l], this.layer_dims[l - 1]], 0);
+            v[l]["db"].create([this.layer_dims[l], 1], 0);
+            s[l]["dW"].create([this.layer_dims[l], this.layer_dims[l - 1]], 0);
+            s[l]["db"].create([this.layer_dims[l], 1], 0);
+        }
+        return {
+            v: v,
+            s: s};
+    };
     //return cache["W"/"b" + No.layer]
-    function initialize_parameters(layer_dims, init_method) {
+    init.prototype.initialize_parameters = function () {
         var parameters = new Object();
-        var L = layer_dims.length;
-        for (var idx = 1; idx < L; idx++) {
-            parameters["W" + String(idx)] = new Matrix();
-            parameters["b" + String(idx)] = new Matrix();
-            parameters["W" + String(idx)].create([layer_dims[idx], layer_dims[idx - 1]]);
-            parameters["b" + String(idx)].create([layer_dims[idx], 1]);
-            if (init_method === "He") {
-                parameters["W" + String(idx)].mul([[Math.pow(2 / layer_dims[idx - 1], 0.5)]]);
+        var L = this.layer_dims.length;
+        for (var l = 1; l < L; l++) {
+            parameters["W" + String(l)] = new Matrix();
+            parameters["b" + String(l)] = new Matrix();
+            parameters["W" + String(l)].create([this.layer_dims[l], this.layer_dims[l - 1]]);
+            parameters["b" + String(l)].create([this.layer_dims[l], 1]);
+            if (this.init_method === "He") {
+                parameters["W" + String(l)].mul([[Math.pow(2 / this.layer_dims[l - 1], 0.5)]]);
             }
         }
         return parameters;
-    }
+    };
     //return A, cache["W"/"b"/"Z"/"A"/"D"]
-    function linear_activation_forward(A_prev, W, b, activation, keep_prob) {
+    init.prototype.linear_activation_forward = function (A_prev, W, b, activation) {
         //return Z, cache["D"]
         var linear_forward = function (A, W, b, keep_prob) {
             var cache = new Object();
@@ -467,7 +578,7 @@ var ML = ML || {};
             return A;
         };
         var cache = new Object();
-        var linearForward = linear_forward(A_prev, W, b, keep_prob);
+        var linearForward = linear_forward(A_prev, W, b, this.keep_prob);
         var Z = linearForward.Z;
         if (activation === "sigmoid") {
             var A = sigmiod(Z);
@@ -483,44 +594,45 @@ var ML = ML || {};
             A: A,
             cache: cache
         };
-    }
+    };
     //return A, cache[No.layer]
-    function L_model_forward(X, parameters, layer_num, keep_prob) {
+    init.prototype.L_model_forward = function (X, parameters) {
         var cache = new Array();
         var A_prev = X;
-        var L = layer_num - 1;
-        for (var l = 1; l < L; l++) {
-            var forward = linear_activation_forward(A_prev, parameters["W" + String(l)], parameters["b" + String(l)], "relu", keep_prob);
+        for (var l = 1; l < this.layer_num; l++) {
+            var forward = this.linear_activation_forward(A_prev, parameters["W" + String(l)], parameters["b" + String(l)], "relu");
             A_prev = forward.A;
             cache[l] = forward.cache;
         }
-        forward = linear_activation_forward(A_prev, parameters["W" + String(L)], parameters["b" + String(L)], "sigmoid", keep_prob);
-        cache[L] = forward.cache;
+        forward = this.linear_activation_forward(A_prev, parameters["W" + String(this.layer_num)], parameters["b" + String(this.layer_num)], "sigmoid");
+        cache[this.layer_num] = forward.cache;
         return{A: forward.A,
             cache: cache
         };
-    }
+    };
     //return cost value
-    function compute_cost(AL, Y, lambda, parameters, layer_num) {
+    init.prototype.compute_cost = function (X, Y, parameters) {
         var m = Y.shape()[1];
         var one = new Matrix([[1]]);
+        var AL = this.L_model_forward(X, parameters).A;
         if (AL.shape()[0] !== Y.shape()[0]) {
             throw "Error: unable to compute the cost with the dimension of the input matrixes of (" + AL.shape()[0] + "," + AL.shape()[1] + ") and (" + Y.shape()[0] + "," + Y.shape()[1] + ")";
         }
+        //AL.show();
+        //AL.log().show();
         var cost = (Y.mul(AL.log()).add(one.minus(Y).mul(one.minus(AL).log()))).sum().mul([[-1 / m]]);
-        //var cost = Y.minus(AL).mul([[-1 / m]]);
-        if (lambda > 0) {
+        if (this.lambda > 0) {
             var sum = 0;
-            for (var l = 1; l < layer_num; l++) {
+            for (var l = 1; l <= this.layer_num; l++) {
                 sum += parameters["W" + String(l)].pow(2).sum().matrix[0][0];
             }
-            var L2_cost = lambda.div([[2 * m]]).mul([[sum]]);
+            var L2_cost = this.lambda.div([[2 * m]]).mul([[sum]]);
             cost = cost.add(L2_cost);
         }
         return cost.matrix[0][0];
-    }
+    };
     //return dW, db, dA_prev
-    function linear_activation_backward(dA, cache, activation, lambda, keep_prob) {
+    init.prototype.linear_activation_backward = function (dA, cache, activation) {
         //return grad["dA"/"dZ"/"dW"/"db"]
         var linear_backward = function (dZ, cache, lambda, keep_prob) {
             var grad = new Object();
@@ -575,31 +687,67 @@ var ML = ML || {};
         } else if (activation === "sigmoid") {
             dZ = sigmoid_backward(dA, cache["Z"]);
         }
-        var grad = linear_backward(dZ, cache, lambda, keep_prob);
+        var grad = linear_backward(dZ, cache, this.lambda, this.keep_prob);
         return grad;
-    }
+    };
     //return grad[No.layer]
-    function L_model_backward(AL, Y, cache, layer_dims, lambda, keep_prob) {
+    init.prototype.L_model_backward = function (AL, Y, cache) {
         var Y = new Matrix(Y);
         var grad = new Array();
-        var L = layer_dims - 1;
         var dAL = Y.minus([[1]]).div(AL.minus([[1]])).minus(Y.div(AL));
-        grad[L] = linear_activation_backward(dAL, cache[L], "sigmoid", lambda, keep_prob);
-        for (var l = L - 1; l > 0; l--) {
-            grad[l] = linear_activation_backward(grad[l + 1]["dA"], cache[l], "relu", lambda, keep_prob);
+        grad[this.layer_num] = this.linear_activation_backward(dAL, cache[this.layer_num], "sigmoid");
+        for (var l = this.layer_num - 1; l > 0; l--) {
+            grad[l] = this.linear_activation_backward(grad[l + 1]["dA"], cache[l], "relu");
         }
         return grad;
-    }
+    };
     //return updateParameters["W"/"b" + No.layer]
-    function update_parameters(parameters, grads, learning_rate, layer_num) {
+    init.prototype.update_parameters = function (parameters, grads) {
         var updateParameters = new Object();
-        for (var l = 1; l < layer_num; l++) {
-            updateParameters["W" + String(l)] = parameters["W" + String(l)].minus(learning_rate.mul(grads[l]["dW"]));
-            updateParameters["b" + String(l)] = parameters["b" + String(l)].minus(learning_rate.mul(grads[l]["db"]));
+        for (var l = 1; l <= this.layer_num; l++) {
+            updateParameters["W" + String(l)] = parameters["W" + String(l)].minus(this.learning_rate.mul(grads[l]["dW"]));
+            updateParameters["b" + String(l)] = parameters["b" + String(l)].minus(this.learning_rate.mul(grads[l]["db"]));
         }
         return updateParameters;
-    }
-    function gradient_check(parameters, grads, layer_num, lambda, X, Y) {
+    };
+    init.prototype.update_parameters_momentum = function (parameters, grads, v) {
+        var updateParameters = new Object();
+        for (var l = 1; l <= this.layer_num; l++) {
+            //v update
+            v[l]["dW"] = v[l]["dW"].mul([[this.beta1]]).add(grads[l]['dW'].mul([[1 - this.beta1]]));
+            v[l]["db"] = v[l]["db"].mul([[this.beta1]]).add(grads[l]['db'].mul([[1 - this.beta1]]));
+            //parameter["W"/"b"] update
+            updateParameters["W" + String(l)] = parameters["W" + String(l)].minus(this.learning_rate.mul(v[l]["dW"]));
+            updateParameters["b" + String(l)] = parameters["b" + String(l)].minus(this.learning_rate.mul(v[l]["db"]));
+        }
+
+        return updateParameters;
+    };
+    init.prototype.update_parameters_adam = function (parameters, grads, v, s, t) {
+        var updateParameters = new Object();
+        var v_correct = new Array();
+        var s_correct = new Array();
+        for (var l = 1; l <= this.layer_num; l++) {
+            //v update
+            v_correct[l] = new Object();
+            v[l]["dW"] = v[l]["dW"].mul([[this.beta1]]).add(grads[l]['dW'].mul([[1 - this.beta1]]));
+            v_correct[l]["dW"] = v[l]["dW"].div([[1 - Math.pow(this.beta1, t)]]);
+            v[l]["db"] = v[l]["db"].mul([[this.beta1]]).add(grads[l]['db'].mul([[1 - this.beta1]]));
+            v_correct[l]["db"] = v[l]["db"].div([[1 - Math.pow(this.beta1, t)]]);
+            //s update
+            s_correct[l] = new Object();
+            s[l]["dW"] = s[l]["dW"].mul([[this.beta2]]).add(grads[l]['dW'].pow(2).mul([[1 - this.beta2]]));
+            s_correct[l]["dW"] = s[l]["dW"].div([[1 - Math.pow(this.beta2, t)]]);
+            s[l]["db"] = s[l]["db"].mul([[this.beta2]]).add(grads[l]['db'].pow(2).mul([[1 - this.beta2]]));
+            s_correct[l]["db"] = s[l]["db"].div([[1 - Math.pow(this.beta2, t)]]);
+            //parameter["W"/"b"] update
+            updateParameters["W" + String(l)] = parameters["W" + String(l)].minus(this.learning_rate.mul(v_correct[l]["dW"]).div(s_correct[l]["dW"].pow(0.5).add([[1e-7]])));
+            updateParameters["b" + String(l)] = parameters["b" + String(l)].minus(this.learning_rate.mul(v_correct[l]["db"]).div(s_correct[l]["db"].pow(0.5).add([[1e-7]])));
+            //updateParameters["W" + String(l)].minus(parameters["W" + String(l)]).show()
+        }
+        return updateParameters;
+    };
+    init.prototype.gradient_check = function (parameters, grads, X, Y) {
         var gradient_prob = new Array();
         for (var item in parameters) {
             var length = parameters[item].shape()[0];
@@ -609,18 +757,18 @@ var ML = ML || {};
                 for (var j = 0; j < width; j++) {
                     var parametersDummy = parameters;
                     parametersDummy[item].matrix[i][j] += 1e-4;
-                    var forwardPlus = L_model_forward(X, parametersDummy, layer_num).A;
-                    var costPlus = compute_cost(forwardPlus, Y, lambda, parametersDummy, layer_num);
+                    var forwardPlus = this.L_model_forward(X, parametersDummy, this.layer_num).A;
+                    var costPlus = this.compute_cost(forwardPlus, Y, this.lambda, parametersDummy, this.layer_num);
                     parametersDummy[item].matrix[i][j] -= 1e-4;
-                    var forwardMinus = L_model_forward(X, parametersDummy, layer_num).A;
-                    var costMinus = compute_cost(forwardMinus, Y, lambda, parametersDummy, layer_num);
+                    var forwardMinus = this.L_model_forward(X, parametersDummy, this.layer_num).A;
+                    var costMinus = this.compute_cost(forwardMinus, Y, this.lambda, parametersDummy, this.layer_num);
                     gradient_prob.push([(costPlus - costMinus) / 1e-4]);
                     //print(gradient_prob.length);
                 }
             }
         }
         var gradient = new Array();
-        for (var l = 1; l < layer_num; l++) {
+        for (var l = 1; l <= this.layer_num; l++) {
             gradient = gradient.concat(grads[l]["dW"].toVector().matrix).concat(grads[l]["db"].toVector().matrix);
         }
         gradient_prob = new Matrix(gradient_prob);
@@ -636,40 +784,59 @@ var ML = ML || {};
         }
     }
     //return accuracy
-    NN.prototype.fit = function (X, Y) {
-        var predict = function (data_X, data_Y, parameters, layer_num) {
-            var forwardResult = L_model_forward(data_X, parameters, layer_num);
-            var correct = 0;
-            var inCorrect = 0;
-            for (var i = 0; i < forwardResult.A.shape()[1]; i++) {
-                if (Math.abs(data_Y.matrix[0][i] - forwardResult.A.matrix[0][i]) < 0.5) {
-                    correct++;
-                } else {
-                    inCorrect++;
-                }
-            }
-            var accuracy = correct / (correct + inCorrect);
-            print("The accuracy is " + accuracy * 100 + "%");
-            return accuracy;
-        };
-        X = new Matrix(X);
-        Y = new Matrix(Y);
-        X = X.T();
-        Y = Y.T();
-        var parameters = initialize_parameters(this.layer_dims, this.init_method);
-        for (var i = 1; i <= this.iterations; i++) {
-            var forward = L_model_forward(X, parameters, this.layer_num, this.keep_prob);
-            var gradients = L_model_backward(forward.A, Y, forward.cache, this.layer_num, this.lambda, this.keep_prob);
-            if (this.gradient_check && !(this.keep_prob < 1000)) {
-                gradient_check(parameters, gradients, this.layer_num, this.lambda, X, Y);
-            }
-            parameters = update_parameters(parameters, gradients, this.learning_rate, this.layer_num);
-            if (this.print_cost && i % 100 === 0) {
-                print("Cost after iteration " + i + ": " + compute_cost(forward.A, Y, this.lambda, parameters, this.layer_num));
-                //cost.show();
+    init.prototype.predict = function (data_X, data_Y, parameters) {
+        var forwardResult = this.L_model_forward(data_X, parameters);
+        var correct = 0;
+        var inCorrect = 0;
+        for (var i = 0; i < forwardResult.A.shape()[1]; i++) {
+            if (Math.abs(data_Y.matrix[0][i] - forwardResult.A.matrix[0][i]) < 0.5) {
+                correct++;
+            } else {
+                inCorrect++;
             }
         }
-        return predict(X, Y, parameters, this.layer_num);
+        var accuracy = correct / (correct + inCorrect);
+        print("The accuracy is " + accuracy * 100 + "%");
+        return accuracy;
     };
-    ml.NN = NN;
-})(ML);
+    //return accuracy
+    init.prototype.train = function (X, Y) {
+        //Format the training set, delete when not needed
+        X = new Matrix(X).T();
+        Y = new Matrix(Y).T();
+        print("=====Training Started=====");
+        var parameters = this.initialize_parameters();
+        if (this.opti_method === "momentum") {
+            var v = this.initialize_velocity();
+        } else if (this.opti_method === "adam") {
+            var init = this.initialize_adam();
+            var v = init.v;
+            var s = init.s;
+            var t = 0;
+        }
+        for (var iter = 1; iter <= this.iterations; iter++) {
+            var trainingSet = this.random_mini_batches(X, Y);
+            for (var i = 0; i < trainingSet.X.length; i++) {
+                var forward = this.L_model_forward(trainingSet.X[i], parameters);
+                var gradients = this.L_model_backward(forward.A, trainingSet.Y[i], forward.cache);
+                if (this.gradient_check && !(this.keep_prob < 1000)) {
+                    gradient_check(parameters, gradients, X, Y);
+                }
+                if (this.opti_method === "momentum") {
+                    parameters = this.update_parameters_momentum(parameters, gradients, v);
+                } else if (this.opti_method === "adam") {
+                    t = t + 1;
+                    parameters = this.update_parameters_adam(parameters, gradients, v, s, t);
+                } else {
+                    parameters = this.update_parameters(parameters, gradients);
+                }
+            }
+            if (this.print_cost && iter % 1 === 0) {
+                print("Cost after iteration " + iter + ": " + this.compute_cost(X, Y, parameters));
+            }
+        }
+        print("=====Training Finished=====");
+        return this.predict(X, Y, parameters);
+    };
+    ml.init = init;
+})(NN);
